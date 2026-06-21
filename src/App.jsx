@@ -8,23 +8,23 @@ import {
   LayoutDashboard,
   Megaphone,
   Plus,
-  RotateCcw,
   School,
   Search,
   Trash2,
   UsersRound
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { initialData } from "./data/sampleData";
+import { blankData } from "./data/blankData";
 import {
+  createClass,
   createEvent,
   createNotice,
   createStudent,
+  deleteClass,
   deleteEvent,
   deleteNotice,
   fetchAgendaData,
   getDataSourceLabel,
-  resetSampleData as resetRepositorySampleData,
   updateNoticePin
 } from "./services/agendaRepository";
 
@@ -35,6 +35,18 @@ const tabs = [
   { id: "classes", label: "Turmas", icon: GraduationCap },
   { id: "notices", label: "Avisos", icon: Megaphone }
 ];
+
+const priorityOrder = {
+  urgent: 0,
+  important: 1,
+  normal: 2
+};
+
+const priorityLabels = {
+  urgent: "Urgente",
+  important: "Importante",
+  normal: "Normal"
+};
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -64,7 +76,7 @@ function monthLabel(date) {
 }
 
 function App() {
-  const [data, setData] = useState(initialData);
+  const [data, setData] = useState(blankData);
   const [activeTab, setActiveTab] = useState("dashboard");
   const [currentMonth, setCurrentMonth] = useState(() => new Date());
   const [query, setQuery] = useState("");
@@ -80,7 +92,8 @@ function App() {
     note: ""
   });
   const [studentForm, setStudentForm] = useState({ name: "", guardian: "", className: "Maternal", phone: "" });
-  const [noticeForm, setNoticeForm] = useState({ title: "", text: "" });
+  const [noticeForm, setNoticeForm] = useState({ title: "", text: "", priority: "normal" });
+  const [classForm, setClassForm] = useState({ name: "", teacher: "", room: "", schedule: "" });
 
   useEffect(() => {
     refreshData();
@@ -150,8 +163,25 @@ function App() {
     runMutation(async () => {
       const created = await createNotice(noticeForm);
       setData((current) => ({ ...current, notices: [created, ...current.notices] }));
-      setNoticeForm({ title: "", text: "" });
+      setNoticeForm({ title: "", text: "", priority: "normal" });
     }, "Aviso publicado.");
+  }
+
+  function addClass(event) {
+    event.preventDefault();
+    if (!classForm.name.trim()) return;
+    runMutation(async () => {
+      const created = await createClass(classForm);
+      setData((current) => ({ ...current, classes: [...current.classes, created] }));
+      setClassForm({ name: "", teacher: "", room: "", schedule: "" });
+    }, "Turma cadastrada.");
+  }
+
+  function removeClass(id) {
+    runMutation(async () => {
+      await deleteClass(id);
+      setData((current) => ({ ...current, classes: current.classes.filter((item) => item.id !== id) }));
+    }, "Turma excluida.");
   }
 
   function removeEvent(id) {
@@ -181,12 +211,6 @@ function App() {
     }, notice.pinned ? "Aviso desafixado." : "Aviso fixado.");
   }
 
-  function resetSampleData() {
-    runMutation(async () => {
-      setData(await resetRepositorySampleData());
-    }, "Dados de exemplo restaurados.");
-  }
-
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -196,7 +220,7 @@ function App() {
           </span>
           <div>
             <strong>Agenda Escolar</strong>
-            <span>Escolinha Sol</span>
+            <span>Escolinha LaLeLu</span>
           </div>
         </div>
 
@@ -229,9 +253,6 @@ function App() {
               <Check size={16} />
               {isSaving ? "Salvando..." : getDataSourceLabel()}
             </span>
-            <button className="icon-button" title="Restaurar exemplos" onClick={resetSampleData} disabled={isSaving}>
-              <RotateCcw size={18} />
-            </button>
             <button className="icon-button" title="Notificacoes" onClick={() => setActiveTab("notices")}>
               <Bell size={19} />
             </button>
@@ -263,7 +284,7 @@ function App() {
               <section className="panel">
                 <PanelTitle icon={Megaphone} title="Avisos fixados" />
                 <div className="notice-list">
-                  {data.notices
+                  {sortNotices(data.notices)
                     .filter((notice) => notice.pinned)
                     .map((notice) => (
                       <NoticeCard key={notice.id} notice={notice} onToggle={toggleNotice} onRemove={removeNotice} />
@@ -414,20 +435,59 @@ function App() {
         )}
 
         {activeTab === "classes" && (
-          <section className="cards-grid">
-            {data.classes.map((item) => (
-              <article className="class-card" key={item.id}>
-                <span className="class-icon">
-                  <GraduationCap size={22} />
-                </span>
-                <h2>{item.name}</h2>
-                <p>{item.teacher}</p>
-                <div>
-                  <span>{item.room}</span>
-                  <span>{item.schedule}</span>
+          <section className="view-stack">
+            <div className="split-layout">
+              <section className="panel">
+                <PanelTitle icon={GraduationCap} title="Turmas cadastradas" />
+                <div className="cards-grid">
+                  {data.classes.map((item) => (
+                    <article className="class-card" key={item.id}>
+                      <span className="class-icon">
+                        <GraduationCap size={22} />
+                      </span>
+                      <h2>{item.name}</h2>
+                      <p>{item.teacher}</p>
+                      <div>
+                        <span>{item.room}</span>
+                        <span>{item.schedule}</span>
+                      </div>
+                      <button className="icon-button danger" title="Excluir turma" onClick={() => removeClass(item.id)}>
+                        <Trash2 size={17} />
+                      </button>
+                    </article>
+                  ))}
+                  {data.classes.length === 0 && <p className="feedback">Nenhuma turma cadastrada ainda.</p>}
                 </div>
-              </article>
-            ))}
+              </section>
+
+              <section className="panel">
+                <PanelTitle icon={Plus} title="Nova turma" />
+                <form className="form-grid" onSubmit={addClass}>
+                  <label>
+                    Nome da turma
+                    <input value={classForm.name} onChange={(event) => setClassForm({ ...classForm, name: event.target.value })} placeholder="Ex: Jardim I" />
+                  </label>
+                  <label>
+                    Professor(a)
+                    <input value={classForm.teacher} onChange={(event) => setClassForm({ ...classForm, teacher: event.target.value })} placeholder="Nome do professor" />
+                  </label>
+                  <div className="form-row">
+                    <label>
+                      Sala
+                      <input value={classForm.room} onChange={(event) => setClassForm({ ...classForm, room: event.target.value })} placeholder="Ex: Sala 1" />
+                    </label>
+                    <label>
+                      Horario
+                      <input value={classForm.schedule} onChange={(event) => setClassForm({ ...classForm, schedule: event.target.value })} placeholder="Ex: Seg a Sex - 08:00" />
+                    </label>
+                  </div>
+                  <button className="primary-button" type="submit" disabled={isSaving}>
+                    <Plus size={18} />
+                    Cadastrar
+                  </button>
+                </form>
+              </section>
+            </div>
           </section>
         )}
 
@@ -437,7 +497,7 @@ function App() {
               <section className="panel">
                 <PanelTitle icon={Megaphone} title="Mural de avisos" />
                 <div className="notice-list">
-                  {data.notices.map((notice) => (
+                  {sortNotices(data.notices).map((notice) => (
                     <NoticeCard key={notice.id} notice={notice} onToggle={toggleNotice} onRemove={removeNotice} />
                   ))}
                 </div>
@@ -453,6 +513,14 @@ function App() {
                   <label>
                     Mensagem
                     <textarea value={noticeForm.text} onChange={(event) => setNoticeForm({ ...noticeForm, text: event.target.value })} placeholder="Escreva o aviso" />
+                  </label>
+                  <label>
+                    Importancia
+                    <select value={noticeForm.priority} onChange={(event) => setNoticeForm({ ...noticeForm, priority: event.target.value })}>
+                      <option value="normal">Normal</option>
+                      <option value="important">Importante</option>
+                      <option value="urgent">Urgente</option>
+                    </select>
                   </label>
                   <button className="primary-button" type="submit" disabled={isSaving}>
                     <Plus size={18} />
@@ -512,9 +580,12 @@ function EventRow({ event, onRemove }) {
 }
 
 function NoticeCard({ notice, onToggle, onRemove }) {
+  const priority = notice.priority || "normal";
+
   return (
-    <article className={notice.pinned ? "notice-card pinned" : "notice-card"}>
+    <article className={`notice-card ${notice.pinned ? "pinned" : ""} ${priority}`}>
       <div>
+        <span className={`priority-badge ${priority}`}>{priorityLabels[priority]}</span>
         <strong>{notice.title}</strong>
         <p>{notice.text || "Sem detalhes adicionais."}</p>
       </div>
@@ -528,6 +599,13 @@ function NoticeCard({ notice, onToggle, onRemove }) {
       </div>
     </article>
   );
+}
+
+function sortNotices(notices) {
+  return [...notices].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return (priorityOrder[a.priority || "normal"] ?? 2) - (priorityOrder[b.priority || "normal"] ?? 2);
+  });
 }
 
 function Calendar({ month, events }) {
