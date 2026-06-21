@@ -23,6 +23,7 @@ import {
   deleteClass,
   deleteEvent,
   deleteNotice,
+  deleteStudent,
   fetchAgendaData,
   getDataSourceLabel,
   updateNoticePin
@@ -175,6 +176,13 @@ function App() {
       setData((current) => ({ ...current, classes: [...current.classes, created] }));
       setClassForm({ name: "", teacher: "", room: "", schedule: "" });
     }, "Turma cadastrada.");
+  }
+
+  function removeStudent(id) {
+    runMutation(async () => {
+      await deleteStudent(id);
+      setData((current) => ({ ...current, students: current.students.filter((item) => item.id !== id) }));
+    }, "Aluno excluido.");
   }
 
   function removeClass(id) {
@@ -394,6 +402,9 @@ function App() {
                         <span>{student.className} | Resp. {student.guardian || "Nao informado"}</span>
                       </div>
                       <span>{student.phone || "Sem telefone"}</span>
+                      <button className="icon-button danger" title="Excluir aluno" onClick={() => removeStudent(student.id)}>
+                        <Trash2 size={17} />
+                      </button>
                     </article>
                   ))}
                 </div>
