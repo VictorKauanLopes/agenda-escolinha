@@ -1,4 +1,4 @@
-import { initialData } from "../data/sampleData";
+import { blankData } from "../data/blankData";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 
 const storageKey = "agenda-escolinha:v1";
@@ -64,12 +64,41 @@ export async function createNotice(notice) {
 
   const { data, error } = await supabase
     .from("notices")
-    .insert({ title: notice.title, text: notice.text, pinned: false })
+    .insert({ title: notice.title, text: notice.text, priority: notice.priority, pinned: false })
     .select()
     .single();
 
   if (error) throw error;
   return data;
+}
+
+export async function createClass(classData) {
+  if (!isSupabaseConfigured) {
+    return saveLocalItem("classes", { ...classData, id: createId("cls") });
+  }
+
+  const { data, error } = await supabase
+    .from("classes")
+    .insert({
+      name: classData.name,
+      teacher: classData.teacher,
+      room: classData.room,
+      schedule: classData.schedule
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteClass(id) {
+  if (!isSupabaseConfigured) {
+    return deleteLocalItem("classes", id);
+  }
+
+  const { error } = await supabase.from("classes").delete().eq("id", id);
+  if (error) throw error;
 }
 
 export async function deleteEvent(id) {
@@ -102,32 +131,6 @@ export async function updateNoticePin(id, pinned) {
 
   const { error } = await supabase.from("notices").update({ pinned }).eq("id", id);
   if (error) throw error;
-}
-
-export async function resetSampleData() {
-  if (!isSupabaseConfigured) {
-    saveLocalData(initialData);
-    return initialData;
-  }
-
-  await Promise.all([
-    supabase.from("events").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-    supabase.from("students").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-    supabase.from("classes").delete().neq("id", "00000000-0000-0000-0000-000000000000"),
-    supabase.from("notices").delete().neq("id", "00000000-0000-0000-0000-000000000000")
-  ]);
-
-  const [classesResult, studentsResult, eventsResult, noticesResult] = await Promise.all([
-    supabase.from("classes").insert(initialData.classes.map(({ name, teacher, room, schedule }) => ({ name, teacher, room, schedule }))),
-    supabase.from("students").insert(initialData.students.map(mapStudentToDb)),
-    supabase.from("events").insert(initialData.events.map(mapEventToDb)),
-    supabase.from("notices").insert(initialData.notices)
-  ]);
-
-  const error = classesResult.error || studentsResult.error || eventsResult.error || noticesResult.error;
-  if (error) throw error;
-
-  return fetchAgendaData();
 }
 
 async function selectTable(table, column, ascending) {
@@ -181,9 +184,9 @@ function mapStudentToDb(student) {
 function loadLocalData() {
   try {
     const saved = localStorage.getItem(storageKey);
-    return saved ? JSON.parse(saved) : initialData;
+    return saved ? JSON.parse(saved) : blankData;
   } catch {
-    return initialData;
+    return blankData;
   }
 }
 
