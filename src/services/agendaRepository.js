@@ -72,6 +72,15 @@ export async function createNotice(notice) {
   return data;
 }
 
+export async function deleteStudent(id) {
+  if (!isSupabaseConfigured) {
+    return deleteLocalItem("students", id);
+  }
+
+  const { error } = await supabase.from("students").delete().eq("id", id);
+  if (error) throw error;
+}
+
 export async function createClass(classData) {
   if (!isSupabaseConfigured) {
     return saveLocalItem("classes", { ...classData, id: createId("cls") });
