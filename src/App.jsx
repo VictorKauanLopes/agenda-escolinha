@@ -14,7 +14,7 @@ import {
   UsersRound
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { blankData } from "./data/blankData";
+import { initialData as blankData } from "./data/sampleData";
 import {
   createClass,
   createEvent,
